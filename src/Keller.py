@@ -2,6 +2,14 @@ import serial
 import struct
 
 
+class IllegalDataAddressException(Exception):
+    pass
+
+
+class IllegalDataValueException(Exception):
+    pass
+
+
 class Keller:
     """
     Keller class for communication
@@ -23,6 +31,9 @@ class Keller:
         self._serial = serial.Serial(port=self._port)
         self._serial.baudrate = baundrate
         self._serial.timeout = 0.02
+        self._serial.parity = serial.PARITY_NONE
+        self._serial.stopbits = serial.STOPBITS_ONE
+        self._serial.bytesize = 8
         self._EchoTest()
         self._InitDevice()
 
@@ -55,7 +66,7 @@ class Keller:
     def _ArrayCrcModbus(self, data):
         return [i for i in reversed(self._ArrayCrcKeller(bytes(data)))]
 
-    def _SendReceive(self, frame, receiveLenght=10):
+    def _SendReceive(self, frame, receiveLenght=100):
         # todo: Create function to check receive
         self._serial.write(bytes(frame))
         if self._echoOn:
@@ -67,6 +78,8 @@ class Keller:
         if receive is not None:
             if len(receive) == 5:
                 if receive[1] > 0x80:
+                    if receive[2] == 2:
+                        raise IllegalDataAddressException()
                     print('Error code = {}'.format(receive[2]))
 
         return receive
@@ -84,12 +97,17 @@ class Keller:
     def _frameToArray(self, frame):
         return [i for i in frame]
 
+    def _convertArrayToIEE754(self, data):
+        data.reverse()
+        data = struct.unpack('f', bytes(data))
+        value = data[0]
+        return value
+
     def _InitDevice(self):
         frame = [self._address, 48]
         frame += self._ArrayCrcKeller(frame)
         receive = self._frameToArray(self._SendReceive(frame))
-
-        print(receive)
+        # print(receive)
 
     def ReadSerialNumber(self):
         frame = [self._address, 69]
@@ -121,24 +139,31 @@ class Keller:
         frame += self._ArrayCrcModbus(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            receive = self._frameToArray(receive[3:7])
-            receive.reverse()
-            data = struct.unpack('f', bytes(receive))
-            return data[0]
+            value = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
+            return value
 
     def ReadTemperature(self):
         frame = [self._address, 3, 0, 8, 0, 2]
         frame += self._ArrayCrcModbus(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            receive = self._frameToArray(receive[3:7])
-            receive.reverse()
-            data = struct.unpack('f', bytes(receive))
-            return data[0]
+            value = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
+            return value
+
+    def ReadPressureAndTemperature(self):
+        frame = [self._address, 3, 1, 0, 0, 4]
+        frame += self._ArrayCrcModbus(frame)
+        receive = self._SendReceive(frame)
+        if self._CheckCRC(receive):
+            pressure = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
+            temperature = self._convertArrayToIEE754(self._frameToArray(receive[7:11]))
+            return {
+                'pressure': pressure,
+                'temperature': temperature,
+            }
 
     def ReadRegister(self):
         pass
 
     def WriteRegister(self):
         pass
-
