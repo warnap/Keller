@@ -1,11 +1,16 @@
 from src.Keller import Keller
 import time
 
-device1 = Keller(1, port='COM1', baundrate=115200)
+device2 = Keller()
 
-print('SN: {}'.format(device1.ReadSerialNumber()))
-print(device1)
-for i in range(11):
-    data = device1.ReadPressureAndTemperature()
+device1 = Keller(1, port='COM1', baundrate=11200)
+#
+# print('SN: {}'.format(device1.ReadSerialNumber()))
+# print(device1)
+# for i in range(1):
+#     data = device1.ReadPressureAndTemperature()
+#
+#     print('Pressure is {} mbar. Temperature is {} C'.format(data.get('pressure'), data.get('temperature')))
 
-    print('Pressure is {} mbar. Temperature is {} C'.format(data.get('pressure'), data.get('temperature')))
+print(device1.ReadPressure())
+print(device1.ReadRegister())
