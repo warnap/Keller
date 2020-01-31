@@ -1,16 +1,46 @@
-from src.Keller import Keller
+from src.Keller import Keller, KellerMODBUS
+import csv
 import time
+import datetime
 
-device2 = Keller()
+HEADER = ['time', 'datetime', 'pressure', 'temperature']
+# device1 = Keller(1, port='COM1', baundrate=115200)
+device2 = KellerMODBUS(1, port='COM1', baundrate=115200)
 
-device1 = Keller(1, port='COM1', baundrate=11200)
+# print(device1.ReadSerialNumber())
+
+# print(device1.ReadConfiguration(Keller.CFG_P))
+# print(device1.ReadConfiguration(Keller.CFG_T))
+# print(device1.ReadConfiguration(Keller.CFG_CH0))
+# print(device1.ReadConfiguration(Keller.FILTER))
+
+
+print(device2.ReadRegister(KellerMODBUS.CH0_INT))
+print(device2.ReadSerialNumber())
+
+# with open('datas.csv', 'w', newline='') as csvfile:
+#     csv_writer = csv.writer(csvfile)
+#     csv_writer.writerow(HEADER)
 #
+# print(device1.ReadTemperature())
+
+#
+# while True:
+#     data = device1.ReadPressureAndTemperature()
+#     with open('datas.csv', 'a', newline='') as csvfile:
+#         csv_writer = csv.writer(csvfile)
+#         csv_writer.writerow([time.time(),
+#                              datetime.datetime.now(),
+#                              data.get('pressure'),
+#                              data.get('temperature'), ])
+
+
 # print('SN: {}'.format(device1.ReadSerialNumber()))
 # print(device1)
-# for i in range(1):
+# while True:
 #     data = device1.ReadPressureAndTemperature()
 #
 #     print('Pressure is {} mbar. Temperature is {} C'.format(data.get('pressure'), data.get('temperature')))
-
-print(device1.ReadPressure())
-print(device1.ReadRegister())
+#
+# print(device1.ReadPressure())
+# # print(device1.ReadRegister())
