@@ -4,19 +4,21 @@ import time
 import datetime
 
 HEADER = ['time', 'datetime', 'pressure', 'temperature']
-# device1 = Keller(1, port='COM1', baundrate=115200)
-device2 = KellerMODBUS(1, port='COM1', baundrate=115200)
+device1 = Keller(250, port='COM1', baundrate=115200)
+device2 = Keller(1, port='COM1', baundrate=115200)
 
-# print(device1.ReadSerialNumber())
 
+print(device1.ReadSerialNumber())
+print(device1)
+print(device2)
 # print(device1.ReadConfiguration(Keller.CFG_P))
 # print(device1.ReadConfiguration(Keller.CFG_T))
 # print(device1.ReadConfiguration(Keller.CFG_CH0))
 # print(device1.ReadConfiguration(Keller.FILTER))
 
 
-print(device2.ReadRegister(KellerMODBUS.CH0_INT))
-print(device2.ReadSerialNumber())
+# print(device2.ReadRegister(KellerMODBUS.UART))
+# print(device2.ReadSerialNumber())
 
 # with open('datas.csv', 'w', newline='') as csvfile:
 #     csv_writer = csv.writer(csvfile)

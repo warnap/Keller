@@ -17,6 +17,7 @@ class _KellerBase:
     _deviceGroup = None
     _deviceYear = None
     _deviceWeek = None
+    _deviceBuffer = None
     _deviceStatus = None
     _deviceFirmwareVersion = None
 
@@ -29,23 +30,35 @@ class _KellerBase:
         """
         self._address = address
         self._port = port
+        self._initSerialPort(baundrate=baundrate)
+        self._EchoTest()
+        self._initDevice()
+
+    def __str__(self):
+        return 'Pressure sensor ' \
+               '\nAddr: {} port: {}' \
+               '\nClass: {} Group: {} ' \
+               '\nYear: {} Week: {}'.format(self._address,
+                                            self._port,
+                                            self._deviceClass,
+                                            self._deviceGroup,
+                                            self._deviceYear,
+                                            self._deviceWeek)
+
+    def __del__(self):
+        pass
+
+    def _initSerialPort(self, baundrate):
         self._serial = serial.Serial(port=self._port)
         self._serial.baudrate = baundrate
         self._serial.timeout = 0.05
         self._serial.parity = serial.PARITY_NONE
         self._serial.stopbits = serial.STOPBITS_ONE
         self._serial.bytesize = 8
+        self._serial.close()
         if baundrate not in self._avaliableBaundrates:
             raise IllegalBaundrateValueException(
                 'Illegal baundrate speed {} avaliable is only: {}'.format(baundrate, self._avaliableBaundrates))
-        self._EchoTest()
-        # self._initDevice()
-
-    def __str__(self):
-        return 'Pressure sensor Addr: {} from {} port'.format(self._address, self._port)
-
-    def __del__(self):
-        self._serial.close()
 
     def _CRC16(self, frame):
         """"
@@ -82,14 +95,7 @@ class _KellerBase:
         """
         return [i for i in reversed(self._ArrayCrcKeller(bytes(data)))]
 
-    def _SendReceive(self, frame, receiveLenght=20):
-        # TODO: Create function to check receive
-        self._serial.write(bytes(frame))
-        if self._echoOn:
-            receive = self._frameToArray(self._serial.read(receiveLenght + len(frame)))
-            receive = receive[len(frame):]
-        else:
-            receive = self._frameToArray(self._serial.read(receiveLenght))
+    def _checkReceive(self, receive):
 
         if receive is not None:
             if len(receive) == 5:
@@ -108,10 +114,33 @@ class _KellerBase:
                         raise DeviceSaveDataFailureException()
                     if error == 32:
                         raise DeviceIsNotInitializedException()
+                    return False
+                else:
+                    return True
 
-                    print('Error code = {}'.format(receive[2]))
+    def _SendReceive(self, frame, receiveLenght=20):
+        """
+        Internal function to send and get response from device.
+        In this function:
+            - serial port is opening
+            - sending data frame
+            - receiving data frame
+            - closing serial port
+        :param frame: data frame to send
+        :param receiveLenght: how many bytes return received
+        :return: received data frame
+        """
+        self._serial.open()
+        self._serial.write(bytes(frame))
+        if self._echoOn:
+            receive = self._frameToArray(self._serial.read(receiveLenght + len(frame)))
+            receive = receive[len(frame):]
+        else:
+            receive = self._frameToArray(self._serial.read(receiveLenght))
 
-        return receive
+        self._serial.close()
+        if not self._checkReceive(receive):
+            return receive
 
     def _CheckCRC(self, frame):
         """
@@ -125,7 +154,6 @@ class _KellerBase:
             crc_calc = self._ArrayCrcKeller(frame[:-2])
         else:
             crc_calc = self._ArrayCrcModbus(frame[:-2])
-
         return True if crc == crc_calc else False
 
     def _addCRC(self, frame):
@@ -167,9 +195,15 @@ class _KellerBase:
         :return:
         """
         frame = [self._address, 48]
-        frame += self._ArrayCrcKeller(frame)
+        frame = self._addCRC(frame)
         receive = self._frameToArray(self._SendReceive(frame))
-        # TODO: Finish function (_initDevice) to return value.
+        if self._CheckCRC(receive):
+            self._deviceClass = receive[2]
+            self._deviceGroup = receive[3]
+            self._deviceYear = receive[4]
+            self._deviceWeek = receive[5]
+            self._deviceBuffer = receive[6]
+            self._deviceStatus = receive[7]
 
     def _EchoTest(self):
         """
@@ -177,7 +211,7 @@ class _KellerBase:
         :return: boolean
         """
         frame = [self._address, 8, 0, 0, 1, 1]
-        frame += self._ArrayCrcModbus(frame)
+        frame = self._addCRC(frame)
         receive = self._frameToArray(self._SendReceive(frame, receiveLenght=len(frame) * 2))
         if len(receive) > len(frame):
             receive1 = receive[:len(frame)]
@@ -214,7 +248,7 @@ class KellerMODBUS(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            value = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
+            value = self._convertArrayToIEE754(receive[3:-2])
             return value
 
     def ReadTemperature(self):
@@ -226,7 +260,7 @@ class KellerMODBUS(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            value = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
+            value = self._convertArrayToIEE754(receive[3:-2])
             return value
 
     def ReadSerialNumber(self):
@@ -240,7 +274,7 @@ class KellerMODBUS(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            receive = self._frameToArray(receive[3:-2])
+            receive = receive[3:-2]
             receive.reverse()
             data = 0
             for i in range(0, 4):
@@ -256,8 +290,8 @@ class KellerMODBUS(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            pressure = self._convertArrayToIEE754(self._frameToArray(receive[3:7]))
-            temperature = self._convertArrayToIEE754(self._frameToArray(receive[7:11]))
+            pressure = self._convertArrayToIEE754(receive[3:7])
+            temperature = self._convertArrayToIEE754(receive[7:-2])
             return {
                 'pressure': pressure,
                 'temperature': temperature,
@@ -266,8 +300,8 @@ class KellerMODBUS(_KellerBase):
     def ReadRegister(self, data):
         """
         stAddHI, stAddLO, regHI, regLO
-        :param data:
-        :return:
+        :param data: [StAdd_HI, StAdd_LO, REG_HI, REG_LO]
+        :return: receive data from frame
         """
         frame = [self._address, 3] + data
         frame = self._addCRC(frame)
@@ -326,7 +360,7 @@ class Keller(_KellerBase):
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
             print(receive)
-            receive = self._frameToArray(receive[2:6])
+            receive = receive[2:-2]
             receive.reverse()
             data = 0
             for i in range(0, 4):
@@ -351,7 +385,7 @@ class Keller(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            value = self._convertArrayToIEE754(self._frameToArray(receive[3:-2]))
+            value = self._convertArrayToIEE754(receive[3:-2])
             return value
 
     def ReadTemperature(self):
@@ -363,7 +397,7 @@ class Keller(_KellerBase):
         frame = self._addCRC(frame)
         receive = self._SendReceive(frame)
         if self._CheckCRC(receive):
-            value = self._convertArrayToIEE754(self._frameToArray(receive[3:-2]))
+            value = self._convertArrayToIEE754(receive[3:-2])
             return value
 
     def ReadRegister(self):
